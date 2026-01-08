@@ -1,4 +1,5 @@
 import os
+import sys
 import copy
 import time
 import warnings
@@ -20,6 +21,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     cfg = load_config(args.config)
+    print("Config: ", cfg, file=sys.stdout)
     os.makedirs(args.log_dir, exist_ok=True)
 
     ngpus = torch.cuda.device_count()
