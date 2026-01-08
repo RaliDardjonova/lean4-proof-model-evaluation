@@ -1,5 +1,6 @@
 import os
 import time
+import sys
 
 import torch
 import torch.multiprocessing as mp
@@ -23,13 +24,32 @@ class GeneratorProcess(mp.Process):
             top_p=args.top_p,
             n=1,
         )
-        self.prompt_func = MODEL_FORMAT[args.mode]['prompt']
-        self.output_func = MODEL_FORMAT[args.mode]['output']
+
+        mode = args.mode
+
+        self.prompt_func = MODEL_FORMAT[mode]['prompt']
+        self.output_func = MODEL_FORMAT[mode]['output']
 
     def run(self):
         seed = int(time.time()) % 1000 + (self.node_rank * 8 + self.local_rank) * 1000
         os.environ['LOCAL_RANK'] = str(self.local_rank)
-        llm = LLM(model=self.model_path, max_num_batched_tokens=8192, seed=seed, trust_remote_code=True)
+        llm = LLM(model=self.model_path,
+                # quantization="bitsandbytes",      # or "gptq" depending on your checkpoint
+                # load_format="bitsandbytes",
+                quantization="gptq",
+                # max_num_batched_tokens=8192,
+                # quantization="awq",
+                seed=seed,
+                trust_remote_code=True,
+                dtype=torch.float16,
+                # kv_cache_dtype="fp8_e4m3",
+                # max_model_len=4096,
+                max_model_len=11000,
+                # max_model_len=16000,
+                enforce_eager=True,
+                gpu_memory_utilization=0.95,
+                # cpu_offload_gb=4
+                )
         while True:
             inputs = self.task_queue.get()
             if inputs is None: # Terminate when receiving None
@@ -41,11 +61,18 @@ class GeneratorProcess(mp.Process):
                     item.get('_extra_prompt', str()),
                 ]) for _, _, item in inputs
             ]
+            time1 = time.time()
             model_outputs = llm.generate(
                 model_inputs,
                 self.sampling_params,
                 use_tqdm=False,
             )
+            tokenizer = llm.get_tokenizer()
+            output_token_length = [len(tokenizer.encode(_output.outputs[0].text)) for _output in model_outputs]
+            input_token_length = [len(tokenizer.encode(item)) for item in model_inputs]
+            print(f'Elapsed time for {inputs[0]}: {time.time() - time1}', file=sys.stderr)
+            print(f'Input token lengths: {input_token_length}, Sum: {sum(input_token_length)}', file=sys.stderr)
+            print(f'Output token lengths: {output_token_length}, Sum: {sum(output_token_length)}', file=sys.stderr)
             outputs = [self.output_func(_output.outputs[0].text) for _output in model_outputs]
             with self.lock:
                 for (_, request_id, _), output in zip(inputs, outputs):
