@@ -52,13 +52,25 @@ def verify_lean4_file(code, lake_path=DEFAULT_LAKE_PATH, lean_workspace=DEFAULT_
         result['pass'] = not result['errors']
         result['complete'] = result['pass'] and not result['sorries'] and not any("declaration uses 'sorry'" in warning['data'] or 'failed' in warning['data'] for warning in result['warnings'])
     except:
-        result = {
-            "pass": False,
-            "complete": False,
-            "system_errors": traceback.format_exc(),
-            "system_messages": system_messages
-        }
+        try:
+            print(outputs, file=sys.stderr)
+            result = {
+                "pass": False,
+                "complete": False,
+                "system_errors": traceback.format_exc(),
+                "system_messages": system_messages
+            }
+
+        except:
+            result = {
+                "pass": False,
+                "complete": False,
+                "system_errors": traceback.format_exc(),
+                "system_messages": system_messages
+            }
+
     result['verify_time'] = time.time() - start_time
+    print(result, file=sys.stderr)
     return result
 
 
