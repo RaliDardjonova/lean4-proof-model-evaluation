@@ -18,6 +18,7 @@ class SearchProcess(mp.Process):
         self.log_dir = Path(log_dir)
         self.scheduler = scheduler
         self.data_loader = data_loader
+        self.mode = cfg.model_args.mode
         super().__init__()
 
         self._current_prob_idx = None
@@ -37,6 +38,17 @@ class SearchProcess(mp.Process):
         header = data.get('header', str())
         tailer = data.get('tailer', str())
         formal_statement = data['formal_statement']
+        if self.mode.startswith('dsv2') and self.mode != "dsv2_non_cot":
+                    return dict(
+            statement_proposal=f'{header}{proof_code}{tailer}',
+            proof_code=proof_code,
+        )
+        if self.mode.startswith('goedel'):
+                    return dict(
+            statement_proposal=f'{header}{proof_code}{tailer}',
+            proof_code=proof_code,
+        )
+
         return dict(
             statement_proposal=f'{header}{formal_statement}{proof_code}{tailer}',
             proof_code=proof_code,
